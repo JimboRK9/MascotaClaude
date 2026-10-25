@@ -1,7 +1,7 @@
-# Kitsune: Kurama de nueve colas siempre visible. Cada cola es una sesion de Claude Code;
+# Kitsune: zorro de nueve colas siempre visible. Cada cola es una sesion de Claude Code;
 # la punta es gris (en reposo), verde (trabajando) o roja (te espera).
 # Lee los archivos que escribe estado.mjs. Correr con: powershell -STA -File kitsune.ps1
-# Estilo chibi de Kurama. Se dibuja en un lienzo de 200x190 que el Viewbox escala.
+# Estilo chibi. Se dibuja en un lienzo de 200x190 que el Viewbox escala.
 # -Captura <png>: guarda una imagen del zorro a los 3 s (para revisar el dibujo).
 param([string]$Carpeta = (Join-Path $env:USERPROFILE '.claude\kitsune\estado'), [string]$Captura)
 
@@ -102,7 +102,7 @@ foreach ($d in @('M 70,78 C 62,60 59,46 60,30 C 72,42 80,54 86,68 Z')) {
 # Cabeza ancha con mechones en las mejillas.
 [void](Poner (Trazo 'M 58,96 C 58,64 142,64 142,96 L 154,104 L 141,107 L 149,115 L 132,117 C 120,130 80,130 68,117 L 51,115 L 59,107 L 46,104 Z' $naranja))
 
-# Marca oscura de los ojos, con el ceno de la referencia.
+# Marca oscura de los ojos, con ceno.
 $marca = 'M 61,104 C 57,94 60,86 66,82 C 75,87 88,93 97,105 C 88,97 77,92 67,94 C 64,97 62,100 61,104 Z'
 [void](Poner (Trazo $marca $marron 0))
 [void](Poner (Trazo (Espejo $marca) $marron 0))
