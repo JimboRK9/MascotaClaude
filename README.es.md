@@ -45,7 +45,7 @@ cd MascotaClaude
 powershell -ExecutionPolicy Bypass -File .\instalar.ps1
 ```
 
-**Opción B — sin Git.** Baja el `.zip` de la [última versión](https://github.com/JimboRK9/MascotaClaude/releases/latest), descomprímelo y, en PowerShell dentro de la carpeta descomprimida:
+**Opción B — sin Git.** De la [última versión](https://github.com/JimboRK9/MascotaClaude/releases/latest), baja **`kitsune-vX.Y.Z.zip`** (no *Source code*), descomprímelo y, en PowerShell dentro de la carpeta descomprimida:
 
 ```powershell
 Get-ChildItem -Recurse | Unblock-File
@@ -59,12 +59,21 @@ El instalador:
 1. copia los archivos a `~\.claude\kitsune\`;
 2. agrega 7 hooks a `~\.claude\settings.json` (deja un respaldo, conserva tus otros hooks y no duplica si lo corres de nuevo);
 3. instala la extensión `kitsune-puente` en VS Code;
-4. crea accesos directos en Inicio (arranca con Windows) y en el escritorio;
-5. abre el zorro.
+4. crea un acceso directo **Kitsune** en el escritorio.
 
-Después, recarga VS Code (`Ctrl+Shift+P` → *Developer: Reload Window*). Las sesiones de Claude Code que abras desde entonces aparecen como colas.
+Después, abre el zorro con ese acceso directo y recarga VS Code (`Ctrl+Shift+P` → *Developer: Reload Window*). Las sesiones de Claude Code que abras desde entonces aparecen como colas.
 
-**Para actualizar**: `git pull` (o baja la versión nueva) y vuelve a correr `instalar.ps1`.
+**Arrancar con Windows (opcional)**: agrega `-ConInicio` para crear además un acceso directo en la carpeta Inicio:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\instalar.ps1 -ConInicio
+```
+
+**Para actualizar**: `git pull` (o baja la versión nueva) y vuelve a correr `instalar.ps1` (con `-ConInicio` si quieres seguir arrancando con Windows).
+
+### Antivirus
+
+Kitsune son scripts de PowerShell y Node en texto plano que puedes leer antes de correrlos. Algunos antivirus que juzgan el comportamiento (por ejemplo, la *Vigía proactiva* de Kaspersky) marcan los scripts que registran un PowerShell oculto para arrancar con Windows, porque el malware hace lo mismo. Por eso arrancar con Windows es opcional: la instalación por defecto no lo hace. Si usas `-ConInicio` y tu antivirus protesta, instala sin esa opción y abre el zorro desde el acceso directo del escritorio.
 
 ## Desinstalar
 

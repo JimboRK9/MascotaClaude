@@ -47,7 +47,7 @@ cd MascotaClaude
 powershell -ExecutionPolicy Bypass -File .\instalar.ps1
 ```
 
-**Option B — without Git.** Download the `.zip` from the [latest release](https://github.com/JimboRK9/MascotaClaude/releases/latest), extract it, and in PowerShell inside the extracted folder:
+**Option B — without Git.** From the [latest release](https://github.com/JimboRK9/MascotaClaude/releases/latest), download **`kitsune-vX.Y.Z.zip`** (not *Source code*), extract it, and in PowerShell inside the extracted folder:
 
 ```powershell
 Get-ChildItem -Recurse | Unblock-File
@@ -61,12 +61,21 @@ The installer:
 1. copies the files to `~\.claude\kitsune\`;
 2. adds 7 hooks to `~\.claude\settings.json` (it leaves a backup, keeps your other hooks, and doesn't duplicate them if you run it again);
 3. installs the `kitsune-puente` VS Code extension;
-4. creates shortcuts in Startup (launches with Windows) and on the desktop;
-5. opens the fox.
+4. creates a **Kitsune** shortcut on the desktop.
 
-Then reload VS Code (`Ctrl+Shift+P` → *Developer: Reload Window*). Claude Code sessions you open from then on show up as tails.
+Then open the fox with that shortcut and reload VS Code (`Ctrl+Shift+P` → *Developer: Reload Window*). Claude Code sessions you open from then on show up as tails.
 
-**To update**: `git pull` (or download the new release) and run `instalar.ps1` again.
+**Start with Windows (optional)**: add `-ConInicio` to also create a shortcut in the Startup folder:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\instalar.ps1 -ConInicio
+```
+
+**To update**: `git pull` (or download the new release) and run `instalar.ps1` again (with `-ConInicio` if you want to keep starting with Windows).
+
+### Antivirus
+
+Kitsune is a set of plain-text PowerShell and Node scripts you can read before running. Some antivirus engines that judge behavior (e.g. Kaspersky's *System Watcher*) flag scripts that register a hidden PowerShell to run at startup, because malware does the same. That is why starting with Windows is opt-in: the default install doesn't do it. If you use `-ConInicio` and your antivirus complains, install without it and open the fox from the desktop shortcut.
 
 ## Uninstall
 
