@@ -12,9 +12,10 @@ el comportamiento visible está descrito en `README.md`.
 
 ## Estado — 2026-10-25
 
-`v0.1.0` publicada; Kaspersky la marcó como troyano al instalar (ver Gotchas). En curso, la
-`v0.1.1`: sin arranque automático por defecto (`-ConInicio`), el instalador no abre el zorro y el
-cierre va por señal. Sin tests, sin linter, sin build, sin pipeline: se distribuye como ZIP de
+`v0.1.0` publicada; Kaspersky la marcó como troyano al instalar (ver Gotchas). La `v0.1.1`
+(probada solo en local, sin publicar) instaló sin alerta, pero su acceso directo dejaba una
+ventana de Windows Terminal abierta. En curso, la `v0.1.2`: sin accesos directos ni arranque con
+Windows; el hook abre el zorro. Sin tests, sin linter, sin build, sin pipeline: se distribuye como ZIP de
 release (`instalar.ps1`, `desinstalar.ps1`, `comun.ps1`, `hooks.mjs`, `estado.mjs`,
 `kitsune.ps1`, el `.vsix` y los README) que el usuario sube a mano a GitHub Releases.
 
@@ -33,13 +34,13 @@ powershell -NoProfile -STA -ExecutionPolicy Bypass -File .\kitsune.ps1 -Captura 
 # Simular un evento de hook (ESCRIBE en ~\.claude\kitsune\estado real: estado.mjs no tiene ruta configurable)
 '{"session_id":"prueba","hook_event_name":"Stop","cwd":"C:\\x\\demo"}' | node .\estado.mjs
 
-# Instalar / actualizar / desinstalar (tocan ~\.claude\settings.json, VS Code y accesos directos: los corre el usuario)
+# Instalar / actualizar / desinstalar (tocan ~\.claude\settings.json y VS Code: los corre el usuario)
 powershell -ExecutionPolicy Bypass -File .\instalar.ps1
 powershell -ExecutionPolicy Bypass -File .\desinstalar.ps1
 ```
 
-`kitsune.ps1` usa un mutex `Local\kitsune-claude`: si ya hay un zorro abierto (el del acceso
-directo), una segunda instancia sale en silencio. Para probar cambios, cerrar antes el
+`kitsune.ps1` usa un mutex `Local\kitsune-claude`: si ya hay un zorro abierto (el que abrió el
+hook), una segunda instancia sale en silencio. Para probar cambios, cerrar antes el
 instalado (clic derecho → Cerrar), o usar una copia con otro nombre de mutex y de señal. El zorro
 también escucha el evento con nombre `Local\kitsune-claude-cerrar`: los instaladores lo usan para
 cerrarlo (`Cerrar-Kitsune` en `comun.ps1`), y la desaparición del mutex confirma que cerró. Si
@@ -66,6 +67,14 @@ Tres procesos que no se hablan directamente: se coordinan por archivos JSON en
 | `terminales\<pid>.json` | extensión | `kitsune.ps1` | nombre de la ventana de VS Code dueña de esa terminal |
 | `enfocar.json` | `kitsune.ps1` al hacer clic | extensión (`fs.watchFile` 300 ms) | pedido de mostrar la terminal; se ignora si tiene más de 5 s |
 | `posicion.json` | `kitsune.ps1` | `kitsune.ps1` | dónde quedó la ventana |
+| `zorro.pid` | `kitsune.ps1`, que lo tiene abierto y bloqueado mientras vive | `estado.mjs` (intenta abrirlo para escribir) | bloqueado = zorro vivo. No se confía en el pid: Windows lo reutiliza y el archivo queda si el zorro muere |
+| `abriendo` | `estado.mjs` antes de lanzar; lo borra si sale bien | `estado.mjs` | marca de intento fallido: frena reintentos 30 s |
+
+**Quién abre el zorro:** `estado.mjs`, en `SessionStart` y `UserPromptSubmit`, si nadie tiene
+bloqueado `zorro.pid`. Llama a `kitsune.ps1 -Soltar` y espera (~0,5 s); ese PowerShell relanza el
+zorro con `CreateNoWindow` y termina. El rodeo es obligatorio: un hijo directo de Node muere al
+terminar el hook (Node mete a sus hijos en un job), con `detached` PowerShell 5.1 no arranca, y un
+acceso directo abre una ventana de Windows Terminal. El nieto escapa del job y no crea ventana.
 
 **La clave que une todo es el pid de la shell.** `estado.mjs` sube por los procesos padres hasta
 `claude*.exe`; guarda su pid (`claude`, para detectar sesiones muertas) y el de su padre (`shell`),
@@ -92,19 +101,21 @@ Los hooks se registran en `~\.claude\settings.json` vía `hooks.mjs`; los recono
 | `instalar.ps1` aborta al instalar la extensión | `code` escribe avisos en stderr y con `$ErrorActionPreference = 'Stop'` PowerShell 5.1 los vuelve errores; se llama en un bloque con `'Continue'` | 2026-10-25 |
 | El hook falla con perfiles tipo `C:\Users\Juan Perez` | La ruta a `estado.mjs` va entre comillas en el comando del hook (`hooks.mjs`) | 2026-10-25 |
 | `JSON.parse` de `settings.json` falla | El archivo puede traer BOM; `hooks.mjs` lo quita antes de parsear | 2026-10-25 |
-| Kaspersky corta `instalar.ps1` como `PDM:Trojan.Win32.Generic`, mata el proceso y borra el script | Detección por comportamiento: el instalador creaba un acceso directo en Inicio a un PowerShell oculto con `Bypass` y lo lanzaba; además mataba procesos `powershell.exe`. En esa misma máquina, abrir el zorro con el acceso directo del escritorio (la misma línea de comandos) no generó alerta: es una sola observación, no una garantía. Arranque con Windows ahora solo con `-ConInicio`, el instalador no abre el zorro y el cierre va por señal | 2026-10-25 |
+| Kaspersky corta `instalar.ps1` como `PDM:Trojan.Win32.Generic`, mata el proceso y borra el script | Detección por comportamiento: el instalador creaba un acceso directo en Inicio a un PowerShell oculto con `Bypass` y lo lanzaba; además mataba procesos `powershell.exe`. En esa misma máquina, abrir el zorro con el acceso directo del escritorio (la misma línea de comandos) no generó alerta: es una sola observación, no una garantía. Ya no hay arranque con Windows ni accesos directos (abre el hook), el instalador no abre el zorro y el cierre va por señal | 2026-10-25 |
+| Al abrir el zorro queda una ventana de PowerShell abierta | En Windows 11 con Windows Terminal como terminal predeterminada, un acceso directo a `powershell.exe -WindowStyle Hidden` abre una pestaña que no se oculta. `FreeConsole` no la cierra, y lanzar vía `conhost.exe` hizo que Kaspersky bloqueara el `.lnk`. Solución: lo abre el hook con `-Soltar` (ver «Quién abre el zorro») | 2026-10-25 |
 | Las tildes salen rotas en el zorro | `kitsune.ps1` no tiene BOM y PowerShell 5.1 lo lee como ANSI: los textos no ASCII se arman con `[char]0x00F3` etc. Los instaladores sí llevan BOM UTF-8 y usan tildes literales | 2026-10-25 |
 
 ## No hagas
 
-- **No hagas que `estado.mjs` pueda fallar o tardar**: corre en cada evento de cada sesión. Todo va en `try/catch`, termina con `process.exit(0)` y la búsqueda de procesos tiene `timeout: 5000`. Un error del zorro nunca debe bloquear a Claude.
+- **No hagas que `estado.mjs` pueda fallar o tardar**: corre en cada evento de cada sesión. Todo va en `try/catch`, termina con `process.exit(0)`, y la búsqueda de procesos y `abrirZorro` tienen `timeout: 5000`. `abrirZorro` solo cuesta tiempo (~0,5 s) cuando el zorro no está abierto: no le quites el chequeo de `zorro.pid`. Un error del zorro nunca debe bloquear a Claude.
 - **No llames `buscarTerminal()` en cada evento**: cuesta ~1 s por invocación; se reutilizan `claude`/`shell` del archivo existente.
-- **No agregues a los instaladores conductas que parezcan malware**: registrar arranque automático por defecto, lanzar PowerShell oculto, matar procesos (`Stop-Process`), `-EncodedCommand`, descargar cosas o lanzar a través de `explorer.exe`. Kaspersky ya lo marcó como troyano una vez (ver Gotchas, 2026-10-25). Cualquier cambio en `instalar.ps1` se prueba con un antivirus de comportamiento activo antes de publicar.
+- **No vuelvas a abrir el zorro con accesos directos ni desde el instalador**: deja ventana en Windows Terminal y lo que se probó para ocultarla (`conhost.exe`, `--headless`, `wscript`/`mshta`) es justo lo que vigilan los antivirus. Lo abre el hook.
+- **No agregues a los instaladores conductas que parezcan malware**: registrar arranque automático, lanzar PowerShell oculto, matar procesos (`Stop-Process`), `-EncodedCommand`, descargar cosas o lanzar a través de `explorer.exe`. Kaspersky ya lo marcó como troyano una vez (ver Gotchas, 2026-10-25). Cualquier cambio en `instalar.ps1` se prueba con un antivirus de comportamiento activo antes de publicar.
 - **No escribas el JSON de estado directo**: se escribe a `<archivo>.<pid>.tmp` y se renombra, porque `kitsune.ps1` lo lee cada segundo y varias sesiones escriben en paralelo.
-- **No metas caracteres no ASCII literales en `kitsune.ps1`** ni le agregues lógica que dependa de PowerShell 7: el acceso directo usa `powershell.exe` (5.1).
+- **No metas caracteres no ASCII literales en `kitsune.ps1`** ni le agregues lógica que dependa de PowerShell 7: el hook lo lanza con `powershell.exe` (5.1).
 - **No cambies el nombre ni la versión del `.vsix` sin actualizar `instalar.ps1`** (lo copia por nombre literal), ni el `publisher`/`name` de la extensión sin actualizar `desinstalar.ps1` (`jgomez.kitsune-puente`).
 - **No toques `extension-vscode/` sin reempaquetar el `.vsix`**: el instalador usa el `.vsix`, no la carpeta.
-- **No ejecutes `instalar.ps1`/`desinstalar.ps1` ni `node hooks.mjs`**: modifican `~\.claude\settings.json`, VS Code y el inicio de Windows del usuario. Se entrega el comando.
+- **No ejecutes `instalar.ps1`/`desinstalar.ps1` ni `node hooks.mjs`**: modifican `~\.claude\settings.json` y VS Code del usuario. Se entrega el comando.
 
 ## Convenciones del código existente
 

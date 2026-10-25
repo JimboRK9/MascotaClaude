@@ -3,7 +3,22 @@
 # Lee los archivos que escribe estado.mjs. Correr con: powershell -STA -File kitsune.ps1
 # Estilo chibi. Se dibuja en un lienzo de 200x190 que el Viewbox escala.
 # -Captura <png>: guarda una imagen del zorro a los 3 s (para revisar el dibujo).
-param([string]$Carpeta = (Join-Path $env:USERPROFILE '.claude\kitsune\estado'), [string]$Captura)
+# -Soltar: lo usa estado.mjs. Relanza este script sin consola y termina. Lanzado directo desde
+# Node, PowerShell muere con el hook (Node mete a sus hijos en un job que se cierra con el) o, sin
+# consola (detached), ni arranca; un nieto creado con CreateNoWindow escapa del job y no muestra
+# ventana, ni siquiera con Windows Terminal como terminal predeterminada.
+param([string]$Carpeta = (Join-Path $env:USERPROFILE '.claude\kitsune\estado'), [string]$Captura, [switch]$Soltar)
+
+if ($Soltar) {
+    $inicio = New-Object Diagnostics.ProcessStartInfo 'powershell.exe'
+    $inicio.Arguments = "-NoProfile -STA -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Carpeta `"$Carpeta`""
+    # Sin esto heredaria la carpeta del proyecto de Claude y la dejaria ocupada mientras viva.
+    $inicio.WorkingDirectory = Split-Path $Carpeta -Parent
+    $inicio.UseShellExecute = $false
+    $inicio.CreateNoWindow = $true
+    [void][Diagnostics.Process]::Start($inicio)
+    exit
+}
 
 # instalar.ps1 y desinstalar.ps1 piden el cierre con esta senal (matar procesos de PowerShell
 # es conducta de malware para los antivirus). Se crea antes del mutex para que nunca exista
@@ -18,6 +33,16 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 $base = Split-Path $Carpeta -Parent
 $archivoPosicion = Join-Path $base 'posicion.json'
 New-Item -ItemType Directory -Force -Path $Carpeta | Out-Null
+# estado.mjs abre el zorro si nadie tiene bloqueado zorro.pid. Se mantiene abierto sin permiso de
+# escritura para otros mientras el zorro vive; Windows lo suelta aunque el proceso muera, asi que
+# ni un pid reutilizado ni un archivo viejo impiden reabrirlo.
+$archivoPid = Join-Path $base 'zorro.pid'
+$candado = $null
+try {
+    $candado = [IO.File]::Open($archivoPid, 'Create', 'Write', 'Read')
+    $bytes = [Text.Encoding]::ASCII.GetBytes("$PID")
+    $candado.Write($bytes, 0, $bytes.Length); $candado.Flush()
+} catch { }
 
 function Pincel($hex) { [Windows.Media.BrushConverter]::new().ConvertFromString($hex) }
 $naranja  = Pincel '#F7941D'
@@ -475,4 +500,6 @@ if ($Captura) {
 }
 
 [void]$ventana.ShowDialog()
+if ($candado) { $candado.Dispose() }
+Remove-Item $archivoPid -ErrorAction SilentlyContinue
 $mutex.ReleaseMutex()

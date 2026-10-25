@@ -1,5 +1,24 @@
 ﻿# Compartido por instalar.ps1 y desinstalar.ps1, que lo cargan con dot-source.
-$inicio = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup'
+
+# Las versiones 0.1.0 y 0.1.1 creaban accesos directos en el escritorio y en Inicio; ya no se usan.
+# Solo se borran si apuntan a kitsune.ps1 (puede haber otro Kitsune.lnk que no es nuestro), y un
+# fallo solo avisa: es limpieza opcional y el antivirus pudo haber bloqueado el archivo.
+function Quitar-Accesos {
+    $shell = New-Object -ComObject WScript.Shell
+    foreach ($carpeta in @(
+            (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup'),
+            [Environment]::GetFolderPath('Desktop'))) {
+        $lnk = Join-Path $carpeta 'Kitsune.lnk'
+        if (-not (Test-Path $lnk)) { continue }
+        try {
+            if ($shell.CreateShortcut($lnk).Arguments -notmatch 'kitsune\.ps1') { continue }
+            Remove-Item $lnk
+            Write-Host "  $lnk"
+        } catch {
+            Write-Host "  No se pudo borrar $lnk; bórralo a mano." -ForegroundColor Yellow
+        }
+    }
+}
 
 # Pide al zorro que se cierre con su señal con nombre (ver kitsune.ps1) en vez de matar procesos
 # de PowerShell, que los antivirus toman por malware. La señal se reenvía en cada intento por si

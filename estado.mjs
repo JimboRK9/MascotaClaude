@@ -1,6 +1,6 @@
 // Hook de Claude Code: deja el estado de cada sesion en kitsune/estado/<id>.json
 // para que kitsune.ps1 lo pinte en la punta de una cola. Nunca debe bloquear a Claude.
-import { readFileSync, writeFileSync, mkdirSync, rmSync, renameSync, openSync, fstatSync, readSync, closeSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync, renameSync, openSync, fstatSync, readSync, closeSync, statSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
@@ -31,6 +31,33 @@ function buscarTerminal() {
   }
 }
 
+// El zorro vivo tiene zorro.pid abierto sin permiso de escritura para otros (ver kitsune.ps1).
+function zorroAbierto() {
+  try {
+    closeSync(openSync(join(base, 'zorro.pid'), 'r+'));
+    return false; // nadie lo bloquea: quedo de un zorro que ya murio
+  } catch (err) {
+    return err.code === 'EBUSY' || err.code === 'EPERM';
+  }
+}
+
+// Abre el zorro si no esta abierto. Se abre desde aqui y no con un acceso directo: un acceso
+// directo a PowerShell abre una ventana de Windows Terminal que -WindowStyle Hidden no oculta
+// (2026-10-25). -Soltar relanza el zorro sin consola (ver kitsune.ps1); hay que esperarlo
+// (~0,5 s), pero solo cuando el zorro no esta abierto. Si un intento falla (p. ej. un arranque
+// que el antivirus hace pasar de 5 s), la marca 'abriendo' queda y frena los reintentos 30 s,
+// para no cobrar esa espera en cada mensaje; si sale bien, se borra.
+function abrirZorro() {
+  if (zorroAbierto()) return;
+  const intento = join(base, 'abriendo');
+  try { if (Date.now() - statSync(intento).mtimeMs < 30000) return; } catch { /* sin fallos recientes */ }
+  writeFileSync(intento, '');
+  execFileSync('powershell.exe',
+    ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join(base, 'kitsune.ps1'), '-Soltar'],
+    { stdio: 'ignore', timeout: 5000, windowsHide: true });
+  rmSync(intento, { force: true });
+}
+
 // Una respuesta que termina en pregunta deja una decision pendiente. Lee el final de la
 // transcripcion y mira la ultima linea del ultimo texto de Claude; se corta al llegar a tu mensaje.
 function terminaEnPregunta(ruta) {
@@ -59,6 +86,10 @@ try {
   const e = JSON.parse(readFileSync(0, 'utf8'));
   const id = String(e.session_id || '').replace(/[^\w-]/g, '');
   const evento = e.hook_event_name;
+  // Si lo cerraste, vuelve cuando inicias una sesion o le escribes a una.
+  if (evento === 'SessionStart' || evento === 'UserPromptSubmit') {
+    try { abrirZorro(); } catch { /* el zorro es opcional */ }
+  }
   if (id) {
     const carpeta = join(base, 'estado');
     const archivo = join(carpeta, `${id}.json`);
