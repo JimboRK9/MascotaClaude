@@ -1,93 +1,111 @@
 # Kitsune
 
-Un zorro de nueve colas que vive encima de todas tus ventanas y te dice, de un vistazo, qué sesiones de **Claude Code** te necesitan. Cada cola es una sesión; la punta muestra su estado.
+**English** · [Español](README.es.md)
 
-| Alerta | Tranquilo | Dormido |
-|---|---|---|
-| ![alerta](vista-alerta.png) | ![tranquilo](vista-calma.png) | ![dormido](vista-dormido.png) |
+A nine-tailed fox that sits on top of all your windows and tells you, at a glance, which **Claude Code** sessions need you. Each tail is a session; its tip shows the session's state.
 
-## Qué significa cada color
+![Kitsune switching from alert to calm to asleep](demo.gif)
 
-| Punta | Significa |
+> The fox's labels and menus are in Spanish (*trabajando* = working, *te espera* = waiting for you, *espera tu decisión* = waiting for your decision).
+
+## What the colors mean
+
+| Tip | Meaning |
 |---|---|
-| 🟢 Verde | Está trabajando: le escribiste o está usando herramientas |
-| 🔴 Roja | Terminó o te pide algo mientras mirabas otra cosa |
-| ⚪ Gris | En reposo: ya la viste (fuiste a su terminal) o terminó mientras la mirabas |
+| 🟢 Green | Working: you sent it a prompt or it is using tools |
+| 🔴 Red | Finished, or is asking for something, while you were looking elsewhere |
+| ⚪ Gray | Idle: you already saw it (you went to its terminal) or it finished while you were watching |
 
-- Una **decisión pendiente** (pide permiso, te pregunta con opciones o su última línea termina en «?») se queda roja **hasta que la contestes**, aunque la mires.
-- El zorro se pone en **alerta** (ojos rojos, «!» y tiembla) si hay alguna roja, **tranquilo** si alguna trabaja y **dormido** si todas están grises.
+- A **pending decision** (a permission prompt, a multiple-choice question, or a reply whose last line ends in «?») stays red **until you answer it**, even if you look at it.
+- The fox goes on **alert** (red eyes, «!», shaking) if any tail is red, is **calm** if any session is working, and **asleep** if every tail is gray.
 
-## Cómo se usa
+| Alert | Calm | Asleep |
+|---|---|---|
+| ![alert](vista-alerta.png) | ![calm](vista-calma.png) | ![asleep](vista-dormido.png) |
 
-- **Clic en el zorro**: lista de sesiones, primero las que te esperan. Elige una y te lleva a su terminal de VS Code.
-- **Clic en una cola**: te lleva a esa sesión. Pasa el mouse para ver su nombre.
-- **Arrastrar**: lo mueves; recuerda dónde lo dejaste.
-- **Clic derecho**: cerrarlo. Para abrirlo de nuevo, el acceso directo **Kitsune** del escritorio.
+## Usage
 
-## Requisitos
+- **Click the fox**: list of sessions, the ones waiting for you first. Pick one and it takes you to its VS Code terminal.
+- **Click a tail**: takes you to that session. Hover to see its name.
+- **Drag**: moves the fox; it remembers where you left it.
+- **Right-click**: close it. To open it again, use the **Kitsune** shortcut on your desktop.
 
-- Windows 10 u 11 (usa Windows PowerShell 5.1, que ya viene)
-- [Node.js](https://nodejs.org) en el PATH
+## Requirements
+
+- Windows 10 or 11 (uses the built-in Windows PowerShell 5.1)
+- [Node.js](https://nodejs.org) on the PATH
 - [Claude Code](https://claude.com/claude-code)
-- VS Code, opcional: sin él todo funciona menos llevarte a la terminal
+- VS Code, optional: everything works without it except jumping to the terminal
 
-## Instalar
+## Install
+
+**Option A — with Git.** In PowerShell:
 
 ```powershell
-# en la carpeta descargada
+git clone https://github.com/JimboRK9/MascotaClaude.git
+cd MascotaClaude
+powershell -ExecutionPolicy Bypass -File .\instalar.ps1
+```
+
+**Option B — without Git.** Download the `.zip` from the [latest release](https://github.com/JimboRK9/MascotaClaude/releases/latest), extract it, and in PowerShell inside the extracted folder:
+
+```powershell
 Get-ChildItem -Recurse | Unblock-File
 powershell -ExecutionPolicy Bypass -File .\instalar.ps1
 ```
 
-El instalador:
+`Unblock-File` removes the "downloaded from the internet" mark Windows puts on files extracted from a zip; a `git clone` doesn't need it.
 
-1. copia los archivos a `~\.claude\kitsune\`;
-2. agrega 7 hooks a `~\.claude\settings.json` (deja un respaldo, conserva tus otros hooks y no duplica si lo corres de nuevo);
-3. instala la extensión `kitsune-puente` en VS Code;
-4. crea accesos directos en Inicio (arranca con Windows) y en el escritorio;
-5. abre el zorro.
+The installer:
 
-Después, recarga VS Code (`Ctrl+Shift+P` → *Developer: Reload Window*). Las sesiones de Claude Code que abras desde entonces aparecen como colas.
+1. copies the files to `~\.claude\kitsune\`;
+2. adds 7 hooks to `~\.claude\settings.json` (it leaves a backup, keeps your other hooks, and doesn't duplicate them if you run it again);
+3. installs the `kitsune-puente` VS Code extension;
+4. creates shortcuts in Startup (launches with Windows) and on the desktop;
+5. opens the fox.
 
-Para **actualizar**, baja la versión nueva y vuelve a correr `instalar.ps1`.
+Then reload VS Code (`Ctrl+Shift+P` → *Developer: Reload Window*). Claude Code sessions you open from then on show up as tails.
 
-## Desinstalar
+**To update**: `git pull` (or download the new release) and run `instalar.ps1` again.
+
+## Uninstall
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\desinstalar.ps1
 ```
 
-Quita los hooks (con respaldo y sin tocar los ajenos), la extensión, los accesos directos y `~\.claude\kitsune\`.
+Removes the hooks (with a backup and without touching anyone else's), the extension, the shortcuts and `~\.claude\kitsune\`.
 
-## Cómo funciona
+## How it works
 
 ```
-Claude Code ──hooks──▶ estado.mjs ──▶ ~\.claude\kitsune\estado\<sesión>.json ◀──lee cada 1 s── kitsune.ps1 (el zorro)
+Claude Code ──hooks──▶ estado.mjs ──▶ ~\.claude\kitsune\estado\<session>.json ◀──reads every 1 s── kitsune.ps1 (the fox)
                                                                                     │
 VS Code ── kitsune-puente ──▶ foco.json, terminales\ ◀───────────────────────────────┤
               ▲                                                                     │
-              └──────────────────────── enfocar.json ◀──── clic en la lista ────────┘
+              └──────────────────────── enfocar.json ◀──── click on the list ───────┘
 ```
 
-| Archivo | Qué hace |
+| File | What it does |
 |---|---|
-| `estado.mjs` | Hook de Claude Code. Escribe el estado de cada sesión e identifica su terminal (una vez por sesión). Nunca bloquea a Claude |
-| `kitsune.ps1` | El zorro: ventana WPF transparente, siempre encima. `-Captura archivo.png` guarda una imagen para revisar el dibujo |
-| `extension-vscode/` | Código de la extensión `kitsune-puente`: anota las terminales y cuál tiene el foco, y enfoca la que pide el zorro |
-| `kitsune-puente-0.0.1.vsix` | La extensión empaquetada (un zip de `extension-vscode/`) |
-| `hooks.mjs` | Agrega o quita los hooks en `settings.json` |
+| `estado.mjs` | Claude Code hook. Writes each session's state and identifies its terminal (once per session). Never blocks Claude |
+| `kitsune.ps1` | The fox: transparent, always-on-top WPF window. `-Captura file.png` saves an image to check the drawing |
+| `extension-vscode/` | Source of the `kitsune-puente` extension: records the terminals and which one has focus, and focuses the one the fox asks for |
+| `kitsune-puente-0.0.1.vsix` | The packaged extension (a zip of `extension-vscode/`) |
+| `hooks.mjs` | Adds or removes the hooks in `settings.json` |
 
-Todo es local: nada sale de tu máquina.
+Everything is local: nothing leaves your machine.
 
-### Reempaquetar la extensión
+### Repackaging the extension
 
-El `.vsix` es un zip del contenido de `extension-vscode/`:
+The `.vsix` is a zip of the contents of `extension-vscode/`. Delete the old one first (`CreateFromDirectory` won't overwrite):
 
 ```powershell
+Remove-Item .\kitsune-puente-0.0.1.vsix -ErrorAction SilentlyContinue
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [IO.Compression.ZipFile]::CreateFromDirectory("$PWD\extension-vscode", "$PWD\kitsune-puente-0.0.1.vsix")
 ```
 
-## Créditos
+## About the fox
 
-Dibujo inspirado en Kurama, de *Naruto* (Masashi Kishimoto). Proyecto personal sin fines comerciales.
+The nine-tailed fox (*kyūbi no kitsune*) comes from Japanese folklore. Personal, non-commercial project.
