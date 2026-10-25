@@ -12,12 +12,19 @@ el comportamiento visible está descrito en `README.md`.
 
 ## Estado — 2026-10-25
 
-`v0.1.0` publicada; Kaspersky la marcó como troyano al instalar (ver Gotchas). La `v0.1.1`
-(probada solo en local, sin publicar) instaló sin alerta, pero su acceso directo dejaba una
-ventana de Windows Terminal abierta. En curso, la `v0.1.2`: sin accesos directos ni arranque con
-Windows; el hook abre el zorro. Sin tests, sin linter, sin build, sin pipeline: se distribuye como ZIP de
-release (`instalar.ps1`, `desinstalar.ps1`, `comun.ps1`, `hooks.mjs`, `estado.mjs`,
-`kitsune.ps1`, el `.vsix` y los README) que el usuario sube a mano a GitHub Releases.
+Publicada la `v0.1.2` (latest): sin accesos directos ni arranque con Windows; el hook abre el
+zorro. El usuario la instaló desde el ZIP con Kaspersky activo: sin alertas ni ventana de
+terminal, y el zorro vuelve al escribirle a Claude tras cerrarlo. La release `v0.1.0` (marcada
+como troyano) se borró; su tag queda. La `v0.1.1` nunca se publicó.
+
+Sin tests, sin linter, sin build, sin pipeline: se distribuye como ZIP de release
+(`instalar.ps1`, `desinstalar.ps1`, `comun.ps1`, `hooks.mjs`, `estado.mjs`, `kitsune.ps1`, el
+`.vsix` y los README, dentro de una carpeta `kitsune/`) que el usuario sube a mano a GitHub
+Releases, siempre marcando *latest* porque los README enlazan a `releases/latest`.
+
+Pendiente: no hay licencia en el repo (sin ella nadie puede usar ni modificar el código
+legalmente); reportar el falso positivo a Kaspersky; los rasgos del dibujo (marcas y ceño de los
+ojos) aún recuerdan al personaje original.
 
 ## Cómo correr esto
 
