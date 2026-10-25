@@ -12,8 +12,11 @@ el comportamiento visible está descrito en `README.md`.
 
 ## Estado — 2026-10-25
 
-Versión inicial (`fc34ad2`). Sin tests, sin linter, sin build, sin pipeline: se distribuye como
-carpeta y se instala con `instalar.ps1`.
+`v0.1.0` publicada; Kaspersky la marcó como troyano al instalar (ver Gotchas). En curso, la
+`v0.1.1`: sin arranque automático por defecto (`-ConInicio`), el instalador no abre el zorro y el
+cierre va por señal. Sin tests, sin linter, sin build, sin pipeline: se distribuye como ZIP de
+release (`instalar.ps1`, `desinstalar.ps1`, `comun.ps1`, `hooks.mjs`, `estado.mjs`,
+`kitsune.ps1`, el `.vsix` y los README) que el usuario sube a mano a GitHub Releases.
 
 ## Cómo correr esto
 
@@ -36,8 +39,12 @@ powershell -ExecutionPolicy Bypass -File .\desinstalar.ps1
 ```
 
 `kitsune.ps1` usa un mutex `Local\kitsune-claude`: si ya hay un zorro abierto (el del acceso
-directo de Inicio), una segunda instancia sale en silencio. Para probar cambios, cerrar antes el
-instalado (clic derecho → Cerrar).
+directo), una segunda instancia sale en silencio. Para probar cambios, cerrar antes el
+instalado (clic derecho → Cerrar), o usar una copia con otro nombre de mutex y de señal. El zorro
+también escucha el evento con nombre `Local\kitsune-claude-cerrar`: los instaladores lo usan para
+cerrarlo (`Cerrar-Kitsune` en `comun.ps1`), y la desaparición del mutex confirma que cerró. Si
+no cierra (versión sin señal), `Asegurar-Cerrado` le pide al usuario cerrarlo y no sigue hasta
+que lo haga.
 
 Reempaquetar la extensión tras tocar `extension-vscode/` (el `.vsix` es un zip de su contenido;
 `CreateFromDirectory` falla si el destino ya existe, así que hay que borrar el viejo primero):
@@ -85,12 +92,14 @@ Los hooks se registran en `~\.claude\settings.json` vía `hooks.mjs`; los recono
 | `instalar.ps1` aborta al instalar la extensión | `code` escribe avisos en stderr y con `$ErrorActionPreference = 'Stop'` PowerShell 5.1 los vuelve errores; se llama en un bloque con `'Continue'` | 2026-10-25 |
 | El hook falla con perfiles tipo `C:\Users\Juan Perez` | La ruta a `estado.mjs` va entre comillas en el comando del hook (`hooks.mjs`) | 2026-10-25 |
 | `JSON.parse` de `settings.json` falla | El archivo puede traer BOM; `hooks.mjs` lo quita antes de parsear | 2026-10-25 |
+| Kaspersky corta `instalar.ps1` como `PDM:Trojan.Win32.Generic`, mata el proceso y borra el script | Detección por comportamiento: el instalador creaba un acceso directo en Inicio a un PowerShell oculto con `Bypass` y lo lanzaba; además mataba procesos `powershell.exe`. En esa misma máquina, abrir el zorro con el acceso directo del escritorio (la misma línea de comandos) no generó alerta: es una sola observación, no una garantía. Arranque con Windows ahora solo con `-ConInicio`, el instalador no abre el zorro y el cierre va por señal | 2026-10-25 |
 | Las tildes salen rotas en el zorro | `kitsune.ps1` no tiene BOM y PowerShell 5.1 lo lee como ANSI: los textos no ASCII se arman con `[char]0x00F3` etc. Los instaladores sí llevan BOM UTF-8 y usan tildes literales | 2026-10-25 |
 
 ## No hagas
 
 - **No hagas que `estado.mjs` pueda fallar o tardar**: corre en cada evento de cada sesión. Todo va en `try/catch`, termina con `process.exit(0)` y la búsqueda de procesos tiene `timeout: 5000`. Un error del zorro nunca debe bloquear a Claude.
 - **No llames `buscarTerminal()` en cada evento**: cuesta ~1 s por invocación; se reutilizan `claude`/`shell` del archivo existente.
+- **No agregues a los instaladores conductas que parezcan malware**: registrar arranque automático por defecto, lanzar PowerShell oculto, matar procesos (`Stop-Process`), `-EncodedCommand`, descargar cosas o lanzar a través de `explorer.exe`. Kaspersky ya lo marcó como troyano una vez (ver Gotchas, 2026-10-25). Cualquier cambio en `instalar.ps1` se prueba con un antivirus de comportamiento activo antes de publicar.
 - **No escribas el JSON de estado directo**: se escribe a `<archivo>.<pid>.tmp` y se renombra, porque `kitsune.ps1` lo lee cada segundo y varias sesiones escriben en paralelo.
 - **No metas caracteres no ASCII literales en `kitsune.ps1`** ni le agregues lógica que dependa de PowerShell 7: el acceso directo usa `powershell.exe` (5.1).
 - **No cambies el nombre ni la versión del `.vsix` sin actualizar `instalar.ps1`** (lo copia por nombre literal), ni el `publisher`/`name` de la extensión sin actualizar `desinstalar.ps1` (`jgomez.kitsune-puente`).

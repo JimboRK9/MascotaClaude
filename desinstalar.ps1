@@ -4,12 +4,12 @@
 $ErrorActionPreference = 'Stop'
 $destino = Join-Path $env:USERPROFILE '.claude\kitsune'
 
+. (Join-Path $PSScriptRoot 'comun.ps1')
+
 function Paso($texto) { Write-Host "`n> $texto" -ForegroundColor Cyan }
 
 Paso 'Cerrando Kitsune'
-Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" |
-    Where-Object CommandLine -match 'kitsune\.ps1' |
-    ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+Asegurar-Cerrado
 
 Paso 'Quitando los hooks de ~\.claude\settings.json'
 if (Get-Command node -ErrorAction SilentlyContinue) {
@@ -24,9 +24,7 @@ if (Get-Command code -ErrorAction SilentlyContinue) {
 }
 
 Paso 'Borrando accesos directos'
-foreach ($carpeta in @(
-        (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup'),
-        [Environment]::GetFolderPath('Desktop'))) {
+foreach ($carpeta in @($inicio, [Environment]::GetFolderPath('Desktop'))) {
     $lnk = Join-Path $carpeta 'Kitsune.lnk'
     if (Test-Path $lnk) { Remove-Item $lnk; Write-Host "  $lnk" }
 }

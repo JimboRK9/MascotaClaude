@@ -5,6 +5,10 @@
 # -Captura <png>: guarda una imagen del zorro a los 3 s (para revisar el dibujo).
 param([string]$Carpeta = (Join-Path $env:USERPROFILE '.claude\kitsune\estado'), [string]$Captura)
 
+# instalar.ps1 y desinstalar.ps1 piden el cierre con esta senal (matar procesos de PowerShell
+# es conducta de malware para los antivirus). Se crea antes del mutex para que nunca exista
+# el mutex sin la senal: si no, el instalador confundiria al zorro con una version anterior.
+$senalCerrar = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::AutoReset, 'Local\kitsune-claude-cerrar')
 $creado = $false
 $mutex = New-Object System.Threading.Mutex($true, 'Local\kitsune-claude', [ref]$creado)
 if (-not $creado) { exit }
@@ -421,6 +425,7 @@ $script:paso = 0
 $reloj = New-Object Windows.Threading.DispatcherTimer
 $reloj.Interval = [TimeSpan]::FromMilliseconds(100)
 $reloj.Add_Tick({
+    if ($senalCerrar.WaitOne(0)) { $reloj.Stop(); $ventana.Close(); return }
     $script:paso++
     if ($script:paso % 10 -eq 1) {
         $sesiones = Leer-Sesiones
