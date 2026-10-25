@@ -26,7 +26,7 @@ Un zorro de nueve colas que vive encima de todas tus ventanas y te dice, de un v
 - **Clic en el zorro**: lista de sesiones, primero las que te esperan. Elige una y te lleva a su terminal de VS Code.
 - **Clic en una cola**: te lleva a esa sesión. Pasa el mouse para ver su nombre.
 - **Arrastrar**: lo mueves; recuerda dónde lo dejaste.
-- **Clic derecho**: cerrarlo. Para abrirlo de nuevo, el acceso directo **Kitsune** del escritorio.
+- **Clic derecho**: cerrarlo. Vuelve la próxima vez que inicies una sesión de Claude Code o le escribas a una.
 
 ## Requisitos
 
@@ -45,7 +45,7 @@ cd MascotaClaude
 powershell -ExecutionPolicy Bypass -File .\instalar.ps1
 ```
 
-**Opción B — sin Git.** Baja el `.zip` de la [última versión](https://github.com/JimboRK9/MascotaClaude/releases/latest), descomprímelo y, en PowerShell dentro de la carpeta descomprimida:
+**Opción B — sin Git.** De la [última versión](https://github.com/JimboRK9/MascotaClaude/releases/latest), baja **`kitsune-vX.Y.Z.zip`** (no *Source code*), descomprímelo y, en PowerShell dentro de la carpeta descomprimida:
 
 ```powershell
 Get-ChildItem -Recurse | Unblock-File
@@ -59,12 +59,15 @@ El instalador:
 1. copia los archivos a `~\.claude\kitsune\`;
 2. agrega 7 hooks a `~\.claude\settings.json` (deja un respaldo, conserva tus otros hooks y no duplica si lo corres de nuevo);
 3. instala la extensión `kitsune-puente` en VS Code;
-4. crea accesos directos en Inicio (arranca con Windows) y en el escritorio;
-5. abre el zorro.
+4. quita los accesos directos del escritorio y de Inicio que creaban versiones anteriores.
 
-Después, recarga VS Code (`Ctrl+Shift+P` → *Developer: Reload Window*). Las sesiones de Claude Code que abras desde entonces aparecen como colas.
+Después, recarga VS Code (`Ctrl+Shift+P` → *Developer: Reload Window*). No hay acceso directo ni nada que arranque con Windows: **el zorro aparece solo cuando inicias una sesión de Claude Code o le escribes a una**. Las sesiones que ya estaban abiertas antes de la primera instalación aparecen al reiniciarlas.
 
 **Para actualizar**: `git pull` (o baja la versión nueva) y vuelve a correr `instalar.ps1`.
+
+### Antivirus
+
+Kitsune son scripts de PowerShell y Node en texto plano que puedes leer antes de correrlos. No registra nada para arrancar con Windows ni mata procesos: los antivirus que juzgan el comportamiento (por ejemplo, la *Vigía proactiva* de Kaspersky) marcaron una versión temprana que sí lo hacía. Si el tuyo aún protesta, [abre un issue](https://github.com/JimboRK9/MascotaClaude/issues) con el nombre del antivirus y la detección.
 
 ## Desinstalar
 
@@ -72,7 +75,7 @@ Después, recarga VS Code (`Ctrl+Shift+P` → *Developer: Reload Window*). Las s
 powershell -ExecutionPolicy Bypass -File .\desinstalar.ps1
 ```
 
-Quita los hooks (con respaldo y sin tocar los ajenos), la extensión, los accesos directos y `~\.claude\kitsune\`.
+Quita los hooks (con respaldo y sin tocar los ajenos), la extensión, los accesos directos que hayan dejado versiones anteriores y `~\.claude\kitsune\`.
 
 ## Cómo funciona
 
@@ -86,7 +89,7 @@ VS Code ── kitsune-puente ──▶ foco.json, terminales\ ◀────�
 
 | Archivo | Qué hace |
 |---|---|
-| `estado.mjs` | Hook de Claude Code. Escribe el estado de cada sesión e identifica su terminal (una vez por sesión). Nunca bloquea a Claude |
+| `estado.mjs` | Hook de Claude Code. Escribe el estado de cada sesión, identifica su terminal (una vez por sesión) y abre el zorro si no está abierto. Nunca bloquea a Claude |
 | `kitsune.ps1` | El zorro: ventana WPF transparente, siempre encima. `-Captura archivo.png` guarda una imagen para revisar el dibujo |
 | `extension-vscode/` | Código de la extensión `kitsune-puente`: anota las terminales y cuál tiene el foco, y enfoca la que pide el zorro |
 | `kitsune-puente-0.0.1.vsix` | La extensión empaquetada (un zip de `extension-vscode/`) |

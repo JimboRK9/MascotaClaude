@@ -1,9 +1,14 @@
 ﻿# Instala Kitsune para el usuario actual. Correr desde la carpeta descomprimida:
 #   powershell -ExecutionPolicy Bypass -File .\instalar.ps1
 # Se puede correr de nuevo para actualizar: reemplaza los archivos y no duplica los hooks.
+# No crea accesos directos ni arranque con Windows: el hook (estado.mjs) abre el zorro al iniciar
+# una sesión o escribirle. Un instalador que registra un PowerShell oculto para arrancar con
+# Windows es lo que Kaspersky marcó como PDM:Trojan.Win32.Generic (2026-10-25), y un acceso
+# directo a PowerShell deja abierta una ventana de Windows Terminal en Windows 11.
 $ErrorActionPreference = 'Stop'
 $origen = $PSScriptRoot
 $destino = Join-Path $env:USERPROFILE '.claude\kitsune'
+. (Join-Path $origen 'comun.ps1')
 
 function Paso($texto) { Write-Host "`n> $texto" -ForegroundColor Cyan }
 
@@ -16,9 +21,7 @@ $hayCode = [bool](Get-Command code -ErrorAction SilentlyContinue)
 if ($hayCode) { Write-Host '  VS Code encontrado' } else { Write-Host '  VS Code no encontrado: se omite la extensión (la lista del zorro no podrá llevarte a la terminal)' -ForegroundColor Yellow }
 
 Paso 'Cerrando Kitsune si está abierto'
-Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" |
-    Where-Object CommandLine -match 'kitsune\.ps1' |
-    ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+Asegurar-Cerrado
 
 Paso "Copiando archivos a $destino"
 New-Item -ItemType Directory -Force -Path $destino | Out-Null
@@ -37,24 +40,12 @@ if ($hayCode) {
     & { $ErrorActionPreference = 'Continue'; code --install-extension (Join-Path $destino 'kitsune-puente-0.0.1.vsix') --force 2>&1 | Out-Null }
 }
 
-Paso 'Creando accesos directos (Inicio y Escritorio)'
-$argumentos = "-NoProfile -STA -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$destino\kitsune.ps1`""
-$shell = New-Object -ComObject WScript.Shell
-foreach ($carpeta in @(
-        (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup'),
-        [Environment]::GetFolderPath('Desktop'))) {
-    $lnk = $shell.CreateShortcut((Join-Path $carpeta 'Kitsune.lnk'))
-    $lnk.TargetPath = 'powershell.exe'
-    $lnk.Arguments = $argumentos
-    $lnk.WorkingDirectory = $destino
-    $lnk.Description = 'Abrir Kitsune'
-    $lnk.Save()
-    Write-Host "  $carpeta\Kitsune.lnk"
-}
+Paso 'Quitando accesos directos de versiones anteriores'
+Quitar-Accesos
 
-Paso 'Abriendo Kitsune'
-Start-Process powershell.exe -ArgumentList $argumentos
-
+# No se abre el zorro desde aquí: lanzarlo oculto desde el instalador es parte de lo que el
+# antivirus marcó. Lo abre el hook.
 Write-Host "`nListo." -ForegroundColor Green
+Write-Host '  - El zorro aparece cuando inicias una sesión de Claude Code o le escribes a una.'
 Write-Host '  - Recarga VS Code (Ctrl+Shift+P > Developer: Reload Window) para activar la extensión.'
-Write-Host '  - Las sesiones de Claude Code que abras desde ahora aparecen como colas; las ya abiertas, al reiniciarlas.'
+Write-Host '  - Las sesiones que ya estaban abiertas antes de la primera instalación aparecen al reiniciarlas.'
