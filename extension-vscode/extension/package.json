@@ -1,0 +1,10 @@
+{
+  "name": "kitsune-puente",
+  "displayName": "Kitsune puente",
+  "description": "Enlaza el zorro Kitsune con las terminales de VS Code",
+  "publisher": "jgomez",
+  "version": "0.0.1",
+  "engines": { "vscode": "^1.80.0" },
+  "main": "./extension.js",
+  "activationEvents": ["onStartupFinished"]
+}

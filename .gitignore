@@ -1,0 +1,7 @@
+# Estado en ejecucion (si alguien prueba desde la carpeta del repo)
+estado/
+terminales/
+foco.json
+enfocar.json
+posicion.json
+*.tmp
