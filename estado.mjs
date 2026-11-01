@@ -1,6 +1,6 @@
 // Hook de Claude Code: deja el estado de cada sesion en kitsune/estado/<id>.json
 // para que kitsune.ps1 lo pinte en la punta de una cola. Nunca debe bloquear a Claude.
-import { readFileSync, writeFileSync, mkdirSync, rmSync, renameSync, openSync, fstatSync, readSync, closeSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync, mkdirSync, rmSync, renameSync, openSync, fstatSync, readSync, closeSync, statSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
@@ -14,20 +14,39 @@ const COLOR = {
   PreToolUse: 'rojo', // solo llega para AskUserQuestion (matcher en settings.json)
 };
 const base = join(homedir(), '.claude', 'kitsune');
+// Origenes de SessionStart en que el mismo proceso puede pasar a otro session_id.
+const CAMBIAN_SESION = ['clear', 'resume', 'fork'];
+const ESPERA_REINTENTO = 5 * 60 * 1000;
 
 // Sube por los procesos padres hasta claude.exe: su pid sirve para saber si la sesion sigue viva,
 // y el de su padre es la shell de la terminal, el mismo pid con que VS Code identifica la terminal.
-// Tarda ~1 s, por eso se hace una sola vez por sesion; claude: 0 marca que ya se intento.
+// Tarda ~1 s, por eso se hace una sola vez por sesion; claude: 0 marca que ya se busco y no esta.
+// Si la busqueda falla (p. ej. PowerShell lento con antivirus) no se sabe nada: devuelve {} y se
+// reintenta en UserPromptSubmit, a lo sumo cada 5 min para no cobrar la espera en cada mensaje.
 function buscarTerminal() {
   try {
-    const ps = `$p = Get-CimInstance Win32_Process -Filter "ProcessId=${process.ppid}"; ` +
+    const ps = `$p = Get-CimInstance Win32_Process -Filter "ProcessId=${process.ppid}" -ErrorAction Stop; ` +
       `for ($i = 0; $i -lt 8 -and $p; $i++) { if ($p.Name -like 'claude*') { "$($p.ProcessId) $($p.ParentProcessId)"; break }; ` +
-      `$p = Get-CimInstance Win32_Process -Filter "ProcessId=$($p.ParentProcessId)" }`;
+      `$p = Get-CimInstance Win32_Process -Filter "ProcessId=$($p.ParentProcessId)" -ErrorAction Stop }`;
     const salida = execFileSync('powershell', ['-NoProfile', '-Command', ps], { encoding: 'utf8', timeout: 5000, windowsHide: true });
     const [claude, shell] = salida.trim().split(/\s+/).map(Number);
     return claude ? { claude, shell } : { claude: 0, shell: 0 };
   } catch {
-    return { claude: 0, shell: 0 };
+    return {};
+  }
+}
+
+// /clear y /resume cambian el session_id dentro del mismo proceso. SessionEnd deberia borrar el
+// archivo anterior, pero puede no alcanzar a correr, y con el pid vivo el zorro no lo limpia: quedaria
+// una cola fantasma congelada (2026-11-01). Se limpia solo aqui y no en el zorro porque un mismo pid
+// no siempre es una sola sesion: un host puede ser el ancestro claude* de varias.
+function retirarAnteriores(carpeta, id, claude) {
+  for (const nombre of readdirSync(carpeta)) {
+    if (!nombre.endsWith('.json') || nombre === `${id}.json`) continue;
+    const ruta = join(carpeta, nombre);
+    try {
+      if (JSON.parse(readFileSync(ruta, 'utf8')).claude === claude) rmSync(ruta, { force: true });
+    } catch { /* otra sesion lo esta escribiendo o ya no existe */ }
   }
 }
 
@@ -105,12 +124,20 @@ try {
     if (evento === 'SessionEnd') {
       rmSync(archivo, { force: true });
     } else if (COLOR[evento] && !esperaInactiva) {
+      const cambiaSesion = evento === 'SessionStart' && CAMBIAN_SESION.includes(e.source);
       const omitir =
-        (evento === 'SessionStart' && actual) ||            // resume o compact: conserva el color
+        (evento === 'SessionStart' && actual && !cambiaSesion) || // compact: nada cambia
         (evento === 'PostToolUse' && actual?.estado === 'verde' && 'claude' in actual); // ya trabajaba y esta identificada
       if (!omitir) {
-        const ids = actual && 'claude' in actual ? { claude: actual.claude, shell: actual.shell } : buscarTerminal();
-        let color = COLOR[evento];
+        const identificada = actual && 'claude' in actual;
+        const ahora = Date.now();
+        const buscar = cambiaSesion || !actual ||
+          (!identificada && evento === 'UserPromptSubmit' && ahora - (actual.buscado || 0) > ESPERA_REINTENTO);
+        let ids = {};
+        if (buscar) ids = buscarTerminal(); // un resume puede venir de otro proceso: el pid guardado no sirve
+        if (!('claude' in ids) && identificada) ids = { claude: actual.claude, shell: actual.shell };
+        if (!('claude' in ids)) ids.buscado = buscar ? ahora : actual?.buscado;
+        let color = evento === 'SessionStart' && actual ? actual.estado : COLOR[evento]; // conserva el color
         // Decision pendiente: permiso, AskUserQuestion o respuesta que termina en pregunta.
         // Se queda roja aunque la mires; solo la apaga contestar (UserPromptSubmit o PostToolUse).
         let decision = evento === 'SessionStart' ? Boolean(actual?.decision) : false;
@@ -120,17 +147,19 @@ try {
         if (evento === 'Stop' && !decision && ids.shell) {
           try { if (JSON.parse(readFileSync(join(base, 'foco.json'), 'utf8')).shell === ids.shell) color = 'gris'; } catch { /* sin extension */ }
         }
-        const ahora = Date.now();
         const temporal = `${archivo}.${process.pid}.tmp`;
         writeFileSync(temporal, JSON.stringify({
           proyecto: basename(e.cwd || '') || id.slice(0, 8),
           estado: color,
           decision,
           inicio: actual?.inicio ?? ahora,
-          ts: ahora,
+          // Si SessionStart conserva el color, conserva el ts: Marcar-Vistas compara el foco contra el.
+          ts: evento === 'SessionStart' && actual ? actual.ts : ahora,
           ...ids,
         }));
         renameSync(temporal, archivo);
+        // Tambien tras un reintento: si la busqueda fallo en el SessionStart, no se pudo limpiar ahi.
+        if ((cambiaSesion || (buscar && actual?.buscado)) && ids.claude) retirarAnteriores(carpeta, id, ids.claude);
       }
     }
   }

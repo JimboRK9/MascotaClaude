@@ -69,7 +69,7 @@ Tres procesos que no se hablan directamente: se coordinan por archivos JSON en
 
 | Archivo | Lo escribe | Lo lee | Contenido |
 |---|---|---|---|
-| `estado\<session_id>.json` | `estado.mjs` (hook); `kitsune.ps1` al marcar vista | `kitsune.ps1` cada 1 s | `proyecto, estado (gris/verde/rojo), decision, inicio, ts, claude, shell` |
+| `estado\<session_id>.json` | `estado.mjs` (hook); `kitsune.ps1` al marcar vista | `kitsune.ps1` cada 1 s | `proyecto, estado (gris/verde/rojo), decision, inicio, ts, claude, shell`; si la búsqueda falló, `buscado` en vez de `claude` y `shell` |
 | `foco.json` | extensión | `estado.mjs` (en `Stop`), `kitsune.ps1` | pid de la shell de la terminal enfocada (`null` si VS Code pierde el foco) |
 | `terminales\<pid>.json` | extensión | `kitsune.ps1` | nombre de la ventana de VS Code dueña de esa terminal |
 | `enfocar.json` | `kitsune.ps1` al hacer clic | extensión (`fs.watchFile` 300 ms) | pedido de mostrar la terminal; se ignora si tiene más de 5 s |
@@ -86,14 +86,17 @@ acceso directo abre una ventana de Windows Terminal. El nieto escapa del job y n
 **La clave que une todo es el pid de la shell.** `estado.mjs` sube por los procesos padres hasta
 `claude*.exe`; guarda su pid (`claude`, para detectar sesiones muertas) y el de su padre (`shell`),
 que es el mismo `terminal.processId` que ve VS Code. Esa búsqueda cuesta ~1 s, así que se hace
-**una sola vez por sesión**; `claude: 0` significa "ya se intentó y no se encontró".
+**una sola vez por sesión** (y otra si `SessionStart` llega con `source` `clear`, `resume` o `fork`).
+`claude: 0` significa "se buscó y no está". Si la búsqueda falla, el archivo queda sin `claude`, con
+`buscado`, y se reintenta en `UserPromptSubmit` a lo sumo cada 5 min.
 
 **Máquina de estados** (`COLOR` en `estado.mjs`, `Marcar-Vistas` en `kitsune.ps1`):
 
 - `UserPromptSubmit`/`PostToolUse` → verde; `Stop`/`Notification`/`PreToolUse(AskUserQuestion)` → rojo; `SessionStart` → gris; `SessionEnd` borra el archivo.
 - `decision: true` (permiso, `AskUserQuestion`, o última línea del último texto del asistente con `?`) mantiene la cola roja aunque la mires; solo la apaga contestar.
 - Roja sin decisión pasa a gris cuando `foco.json` apunta a su shell con un `ts` posterior al de la sesión. Si el `Stop` llega mientras ya la mirabas, `estado.mjs` la escribe gris directamente.
-- `kitsune.ps1` borra estados cuyo pid `claude` ya no existe o con más de 12 h sin cambios.
+- `kitsune.ps1` borra estados cuyo pid `claude` ya no existe o ya no es un proceso `claude*`, y los que no tienen pid tras 12 h sin cambios. Una sesión con pid vivo nunca expira.
+- `SessionStart` con `source` `clear`, `resume` o `fork` borra los otros archivos con el mismo `claude`: el `session_id` cambió dentro del proceso.
 
 Los hooks se registran en `~\.claude\settings.json` vía `hooks.mjs`; los reconoce por la regex
 `kitsune/estado\.mjs` en el comando, así reinstalar no duplica y desinstalar no toca hooks ajenos.
@@ -103,7 +106,9 @@ Los hooks se registran en `~\.claude\settings.json` vía `hooks.mjs`; los recono
 | Síntoma | Causa / solución | Fecha |
 |---|---|---|
 | Una sesión se pone roja ~60 s después de terminar aunque ya la viste | `Notification` de tipo `idle_prompt` / "waiting for your input" llega tras el `Stop`; `estado.mjs` la descarta (`esperaInactiva`) | 2026-10-25 |
-| `SessionStart` (resume/compact) borra el rojo de una sesión | Si ya existe el archivo, `SessionStart` se omite y conserva color y decisión | 2026-10-25 |
+| `SessionStart` (resume/compact) borra el rojo de una sesión | Si ya existe el archivo, `SessionStart` conserva color y decisión; en `compact` ni siquiera escribe | 2026-10-25 |
+| Hay más colas que sesiones y la primera queda congelada | `/clear` o `/resume` cambian el `session_id` en el mismo proceso y el archivo viejo sobrevive con el pid vivo si `SessionEnd` no alcanza a correr (1,5 s por defecto; se sube a 5 con `timeout` en `hooks.mjs`). Lo limpia `retirarAnteriores` en `estado.mjs`. No deduplicar por pid en `kitsune.ps1`: un host puede ser el ancestro `claude*` de varias sesiones y se borrarían en bucle. Las sesiones sin pid (`claude: 0`) no se cubren | 2026-11-01 |
+| Una sesión dejada de noche pierde su cola y reaparece al final | El límite de 12 h se aplicaba también con pid vivo; ahora solo aplica a sesiones sin pid | 2026-11-01 |
 | El nombre de la cola aparece y desaparece al instante | El `ToolTip` de WPF se cierra en esta ventana transparente/topmost/inactiva: se usa un `Popup` propio (`$burbuja`). Por lo mismo no se redibujan las colas ni tiembla el zorro con el mouse encima | 2026-10-25 |
 | `instalar.ps1` aborta al instalar la extensión | `code` escribe avisos en stderr y con `$ErrorActionPreference = 'Stop'` PowerShell 5.1 los vuelve errores; se llama en un bloque con `'Continue'` | 2026-10-25 |
 | El hook falla con perfiles tipo `C:\Users\Juan Perez` | La ruta a `estado.mjs` va entre comillas en el comando del hook (`hooks.mjs`) | 2026-10-25 |

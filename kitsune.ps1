@@ -393,9 +393,16 @@ function Leer-Sesiones {
     $lista = foreach ($f in Get-ChildItem $Carpeta -Filter *.json -ErrorAction SilentlyContinue) {
         try {
             $s = Get-Content $f.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
-            # Sesion muerta sin SessionEnd (terminal cerrada a la fuerza) o sin cambios en 12 h.
-            $muerta = $s.claude -and -not (Get-Process -Id $s.claude -ErrorAction SilentlyContinue)
-            if ($muerta -or $s.ts -lt $limite) { Remove-Item $f.FullName -ErrorAction SilentlyContinue; continue }
+            # Sesion muerta sin SessionEnd (terminal cerrada a la fuerza). Se mira el nombre porque
+            # Windows reutiliza los pid. Las 12 h son solo para sesiones sin pid: una sesion viva
+            # puede pasar la noche sin eventos y no debe perder su cola.
+            if ($s.claude) {
+                $proceso = Get-Process -Id $s.claude -ErrorAction SilentlyContinue
+                $muerta = -not ($proceso -and $proceso.ProcessName -like 'claude*')
+            } else {
+                $muerta = $s.ts -lt $limite
+            }
+            if ($muerta) { Remove-Item $f.FullName -ErrorAction SilentlyContinue; continue }
             $s | Add-Member -NotePropertyName ruta -NotePropertyValue $f.FullName -PassThru
         } catch { }
     }
@@ -456,7 +463,7 @@ $reloj.Add_Tick({
         $sesiones = Leer-Sesiones
         Marcar-Vistas $sesiones
         $script:sesiones = $sesiones
-        $firma = ($sesiones | ForEach-Object { "$($_.ruta)|$($_.estado)|$($_.decision)|$($_.proyecto)" }) -join ';'
+        $firma = ($sesiones | ForEach-Object { "$($_.ruta)|$($_.estado)|$($_.decision)|$($_.proyecto)|$($_.claude)|$($_.shell)" }) -join ';'
         # Con el mouse sobre las colas no se redibuja: recrearlas cerraria el tooltip.
         if ($firma -ne $script:firma -and -not $capaColas.IsMouseOver) {
             $script:firma = $firma
