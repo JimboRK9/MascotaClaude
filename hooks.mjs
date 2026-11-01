@@ -22,7 +22,8 @@ const EVENTOS = [
   ['PreToolUse', 'AskUserQuestion'],
   ['Notification'],
   ['Stop'],
-  ['SessionEnd'],
+  // SessionEnd solo tiene 1,5 s por defecto: con antivirus Node puede no alcanzar a arrancar.
+  ['SessionEnd', undefined, 5],
 ];
 const esDeKitsune = (h) => /kitsune\/estado\.mjs/.test(h?.command || '');
 
@@ -45,10 +46,10 @@ for (const [evento] of EVENTOS) {
 }
 
 if (accion === 'instalar') {
-  for (const [evento, matcher] of EVENTOS) {
+  for (const [evento, matcher, timeout] of EVENTOS) {
     (config.hooks[evento] ??= []).push({
       ...(matcher ? { matcher } : {}),
-      hooks: [{ type: 'command', command: comando }],
+      hooks: [{ type: 'command', command: comando, ...(timeout ? { timeout } : {}) }],
     });
   }
 }
